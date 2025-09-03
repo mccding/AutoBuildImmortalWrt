@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 步骤 1: 检查代码库
+      # 步骤 1: 检出代码库
       # actions/checkout@v4 用于将仓库代码检出到 Runner 上
       - name: 检出代码库
         uses: actions/checkout@v4
@@ -36,12 +36,12 @@ jobs:
           git clone --depth 1 https://github.com/sirpdboy/luci-app-netspeedtest.git openwrt-master/package/sirpdboy/luci-app-netspeedtest
           
       # 步骤 4: 安装编译依赖
-      # 安装 OpenWrt 编译所需的 Python 模块和 Lua 依赖
+      # 安装 OpenWrt 编译所需的所有主机依赖，以确保构建成功
       - name: 安装编译依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pyelftools libreadline-dev
-
+          sudo apt-get install -y build-essential python3 python3-pip libncurses5-dev gawk git zlib1g-dev libssl-dev libcurl4-openssl-dev unzip subversion file build-essential python3-pyelftools libreadline-dev
+          
       # 步骤 5: 进入 OpenWrt 目录并准备编译环境
       - name: 准备编译环境
         run: |

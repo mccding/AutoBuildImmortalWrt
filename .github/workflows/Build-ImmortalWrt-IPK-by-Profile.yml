@@ -87,16 +87,17 @@ jobs:
       # ##################################################################
       - name: Setup ImmortalWrt SDK environment
         run: |
-          # 修复了下载链接: 提供了包含 GCC 版本信息的完整、精确的文件名, 移除了不支持的通配符 *
-          SDK_FILENAME="immortalwrt-sdk-${{ inputs.immortalwrt_version }}-${{ env.TARGET }}-${{ env.SUBTARGET }}_gcc-13.3.0_musl.Linux-x86_64.tar.xz"
-          SDK_URL="https://downloads.immortalwrt.org/releases/${{ inputs.immortalwrt_version }}/sdk/${SDK_FILENAME}"
+          # 修复了下载链接: 使用了在 targets 目录下的正确 SDK 文件路径和名称
+          SDK_FILENAME="immortalwrt-${{ inputs.immortalwrt_version }}-${{ env.TARGET }}-${{ env.SUBTARGET }}-sdk.tar.xz"
+          SDK_URL="https://downloads.immortalwrt.org/releases/${{ inputs.immortalwrt_version }}/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/${SDK_FILENAME}"
           
           echo "📥 下载 SDK from: $SDK_URL"
-          wget -q $SDK_URL -O immortalwrt-sdk.tar.xz
+          wget --no-verbose --tries=5 --connect-timeout=20 $SDK_URL -O immortalwrt-sdk.tar.xz
           
           tar -xJvf immortalwrt-sdk.tar.xz
           
-          SDK_DIR=$(find . -mindepth 1 -maxdepth 1 -type d -name "immortalwrt-sdk-*")
+          # 注意: 解压后的目录名可能不含 gcc 等信息, 所以通配符匹配依然是最稳妥的方式
+          SDK_DIR=$(find . -mindepth 1 -maxdepth 1 -type d -name "immortalwrt-*-sdk-*")
           echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
           cd $SDK_DIR
           echo "✅ SDK 环境准备就绪: $(pwd)"

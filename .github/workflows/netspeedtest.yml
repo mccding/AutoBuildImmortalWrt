@@ -35,14 +35,21 @@ jobs:
           mkdir -p openwrt-master/package/sirpdboy
           git clone --depth 1 https://github.com/sirpdboy/luci-app-netspeedtest.git openwrt-master/package/sirpdboy/luci-app-netspeedtest
           
-      # 步骤 4: 进入 OpenWrt 目录并准备编译环境
+      # 步骤 4: 安装编译依赖
+      # 安装 OpenWrt 编译所需的 Python 模块
+      - name: 安装编译依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pyelftools
+
+      # 步骤 5: 进入 OpenWrt 目录并准备编译环境
       - name: 准备编译环境
         run: |
           cd openwrt-master
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-      # 步骤 5: 配置编译选项
+      # 步骤 6: 配置编译选项
       # 我们使用默认配置，并确保 luci-app-netspeedtest 被选中
       - name: 配置编译
         run: |
@@ -56,14 +63,14 @@ jobs:
           EOF
           make defconfig
           
-      # 6: 编译 luci-app
+      # 7: 编译 luci-app
       # 指定编译 `luci-app-netspeedtest` 包
       - name: 编译 luci-app
         run: |
           cd openwrt-master
           make -j$(nproc) package/luci-app-netspeedtest/compile
           
-      # 7: 上传编译好的 .ipk 包作为构建产物
+      # 8: 上传编译好的 .ipk 包作为构建产物
       - name: 上传编译产物
         uses: actions/upload-artifact@v4
         with:

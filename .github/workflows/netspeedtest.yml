@@ -22,11 +22,11 @@ jobs:
           # 检出所有历史，以确保所有子模块都可用
           fetch-depth: 0
       
-      # 步骤 2: 克隆 OpenWrt 源码
-      # 我们需要 OpenWrt 的编译环境来构建 luci-app
-      - name: 克隆 OpenWrt 源码
+      # 步骤 2: 克隆 ImmortalWrt 源码
+      # 根据你的项目名称，我们使用 ImmortalWrt 的源码作为编译基础
+      - name: 克隆 ImmortalWrt 源码
         run: |
-          git clone --depth 1 https://github.com/openwrt/openwrt.git openwrt-master
+          git clone --depth 1 https://github.com/immortalwrt/immortalwrt.git openwrt-master
           
       # 步骤 3: 克隆 luci-app 源码到 OpenWrt 目录
       # 直接将 luci-app-netspeedtest 的源码克隆到 OpenWrt 的 package 目录中

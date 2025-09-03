@@ -1,5 +1,5 @@
 # 工作流的名称，在 GitHub Actions 页面上显示
-name: 编译 luci-app-netspeedtest
+name: luci-app-netspeedtest
 
 # 触发工作流的事件
 on:
@@ -68,7 +68,7 @@ jobs:
       - name: 编译 luci-app
         run: |
           cd openwrt-master
-          make -j$(nproc) package/luci-app-netspeedtest/compile
+          make -j$(nproc)
           
       # 8: 上传编译好的 .ipk 包作为构建产物
       - name: 上传编译产物

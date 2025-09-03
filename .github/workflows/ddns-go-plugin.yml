@@ -1,4 +1,4 @@
-# workflow 文件名: build-ddns-go-plugin.yml
+# workflow 文件名: ddns-go-plugin.yml
 
 name: Build luci-app-ddns-go Plugin
 
@@ -55,7 +55,7 @@ jobs:
         run: |
           cd openwrt
           # 写入目标平台的基本配置
-          echo "CONFIG_TARGET_${{ env.TARGET_PROFILE//\//_ }}=y" > .config
+          echo "CONFIG_TARGET_${{ replace(env.TARGET_PROFILE, '/', '_') }}=y" > .config
           # 添加需要编译的插件包（luci-app-ddns-go）及其依赖（ddns-go）
           # 设置为 'm' 表示将它们编译成模块（.ipk 文件），而不是直接编译进固件
           echo "CONFIG_PACKAGE_ddns-go=m" >> .config

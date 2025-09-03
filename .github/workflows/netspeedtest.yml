@@ -1,0 +1,74 @@
+# 工作流的名称，在 GitHub Actions 页面上显示
+name: 编译 luci-app-netspeedtest
+
+# 触发工作流的事件
+on:
+  # 允许手动触发工作流
+  workflow_dispatch:
+
+# 工作流中的任务 (jobs)
+jobs:
+  # 唯一的编译任务
+  build:
+    # 在最新的 Ubuntu 环境上运行
+    runs-on: ubuntu-latest
+
+    steps:
+      # 步骤 1: 检查代码库
+      # actions/checkout@v4 用于将仓库代码检出到 Runner 上
+      - name: 检出代码库
+        uses: actions/checkout@v4
+        with:
+          # 检出所有历史，以确保所有子模块都可用
+          fetch-depth: 0
+      
+      # 步骤 2: 克隆 OpenWrt 源码
+      # 我们需要 OpenWrt 的编译环境来构建 luci-app
+      - name: 克隆 OpenWrt 源码
+        run: |
+          git clone --depth 1 https://github.com/openwrt/openwrt.git openwrt-master
+          
+      # 步骤 3: 克隆 luci-app 源码到 OpenWrt 目录
+      # 直接将 luci-app-netspeedtest 的源码克隆到 OpenWrt 的 package 目录中
+      - name: 克隆 luci-app 源码
+        run: |
+          mkdir -p openwrt-master/package/sirpdboy
+          git clone --depth 1 https://github.com/sirpdboy/luci-app-netspeedtest.git openwrt-master/package/sirpdboy/luci-app-netspeedtest
+          
+      # 步骤 4: 进入 OpenWrt 目录并准备编译环境
+      - name: 准备编译环境
+        run: |
+          cd openwrt-master
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          
+      # 步骤 5: 配置编译选项
+      # 我们使用默认配置，并确保 luci-app-netspeedtest 被选中
+      - name: 配置编译
+        run: |
+          cd openwrt-master
+          # 创建一个最小化的 .config 文件以进行编译
+          cat > .config << EOF
+          CONFIG_TARGET_rockchip=y
+          CONFIG_TARGET_rockchip_armv8=y
+          CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5s=y
+          CONFIG_PACKAGE_luci-app-netspeedtest=y
+          EOF
+          make defconfig
+          
+      # 6: 编译 luci-app
+      # 指定编译 `luci-app-netspeedtest` 包
+      - name: 编译 luci-app
+        run: |
+          cd openwrt-master
+          make -j$(nproc) package/luci-app-netspeedtest/compile
+          
+      # 7: 上传编译好的 .ipk 包作为构建产物
+      - name: 上传编译产物
+        uses: actions/upload-artifact@v4
+        with:
+          # 产物的名称
+          name: luci-app-netspeedtest-ipk
+          # 指定上传的路径
+          path: |
+            openwrt-master/bin/packages/*/sirpdboy/luci-app-netspeedtest_*.ipk

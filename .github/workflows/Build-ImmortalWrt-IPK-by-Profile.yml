@@ -82,9 +82,15 @@ jobs:
           echo "SUBTARGET=armv8" >> $GITHUB_ENV
           echo "✅ 设备型号 '${{ inputs.profile }}' 已映射到平台: rockchip/armv8"
 
+      # ##################################################################
+      # ## ↓↓↓ 这里是本次修改的核心部分 ↓↓↓
+      # ##################################################################
       - name: Setup ImmortalWrt SDK environment
         run: |
-          SDK_URL="https://downloads.immortalwrt.org/releases/${{ inputs.immortalwrt_version }}/sdk/immortalwrt-sdk-${{ inputs.immortalwrt_version }}-${{ env.TARGET }}-${{ env.SUBTARGET }}_*.tar.xz"
+          # 修复了下载链接: 提供了包含 GCC 版本信息的完整、精确的文件名, 移除了不支持的通配符 *
+          SDK_FILENAME="immortalwrt-sdk-${{ inputs.immortalwrt_version }}-${{ env.TARGET }}-${{ env.SUBTARGET }}_gcc-13.3.0_musl.Linux-x86_64.tar.xz"
+          SDK_URL="https://downloads.immortalwrt.org/releases/${{ inputs.immortalwrt_version }}/sdk/${SDK_FILENAME}"
+          
           echo "📥 下载 SDK from: $SDK_URL"
           wget -q $SDK_URL -O immortalwrt-sdk.tar.xz
           
@@ -104,15 +110,10 @@ jobs:
           echo "🚀 开始编译..."
           make package/${{ inputs.package_name }}/compile V=s
 
-      # ##################################################################
-      # ## ↓↓↓ 这里是本次修改的核心部分 ↓↓↓
-      # ##################################################################
       - name: Organize and upload IPK package
         uses: softprops/action-gh-release@v2
         with:
-          # 修改1: tag_name 使用插件名, 确保每个插件都有独立的 Release
           tag_name: ipk-${{ inputs.package_name }}
-          # 修改2: Release 的标题现在是 "ImmortalWrt - <你的插件名>"
           name: ImmortalWrt - ${{ inputs.package_name }}
           body: |
             自动编译生成的 IPK 插件包。

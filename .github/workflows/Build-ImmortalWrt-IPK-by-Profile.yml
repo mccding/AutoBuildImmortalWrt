@@ -57,7 +57,7 @@ on:
       package_repo:
         description: '要编译的插件 Git 仓库地址'
         required: true
-        default: 'https://github.com/mccding/luci-app-ddns-go'
+        default: 'https://github.com/sirpdboy/luci-app-ddns-go'
       package_name:
         description: '插件包名 (通常是仓库名)'
         required: true

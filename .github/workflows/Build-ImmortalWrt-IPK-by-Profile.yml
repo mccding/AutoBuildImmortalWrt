@@ -234,6 +234,37 @@ jobs:
 
       - name: Organize and upload IPK package
         if: always()  # 即使前面步骤失败也要尝试上传已有的文件
+        run: |
+          cd ~/immortalwrt
+          
+          # 创建一个临时目录存放所有找到的 IPK 文件
+          mkdir -p /tmp/ipk_files
+          
+          # 查找并复制所有 IPK 文件
+          echo "查找所有 IPK 文件..."
+          find . -name "*.ipk" -type f -exec cp {} /tmp/ipk_files/ \; 2>/dev/null || echo "没有找到 IPK 文件"
+          
+          # 列出找到的文件
+          echo "找到的 IPK 文件:"
+          ls -la /tmp/ipk_files/ || echo "没有文件被复制"
+          
+          # 如果没有找到 IPK 文件，尝试查找其他可能的输出文件
+          if [ -z "$(ls -A /tmp/ipk_files/)" ]; then
+            echo "没有找到 IPK 文件，尝试查找其他编译产物..."
+            find . -name "*ddns*" -type f | head -10
+            find staging_dir/ -name "*ddns*" 2>/dev/null | head -10
+            
+            # 创建一个包含调试信息的文件
+            echo "编译完成，但未找到 IPK 文件。可能的原因：" > /tmp/ipk_files/README.txt
+            echo "1. 编译过程中出现错误" >> /tmp/ipk_files/README.txt
+            echo "2. 包配置不正确" >> /tmp/ipk_files/README.txt
+            echo "3. 依赖项缺失" >> /tmp/ipk_files/README.txt
+            echo "" >> /tmp/ipk_files/README.txt
+            echo "请检查编译日志获取更多信息。" >> /tmp/ipk_files/README.txt
+          fi
+
+      - name: Upload release
+        if: always()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "ipk-${{ inputs.package_name }}-${{ inputs.profile }}-${{ github.run_number }}"
@@ -258,9 +289,7 @@ jobs:
             - 安装前建议备份系统配置
             - 如果某些包编译失败，只包含成功编译的包
           files: |
-            ~/immortalwrt/bin/packages/*/*/*.ipk
-            ~/immortalwrt/bin/packages/*/*.ipk
-            ~/immortalwrt/bin/*.ipk
+            /tmp/ipk_files/*
           prerelease: true
           fail_on_unmatched_files: false
         env:

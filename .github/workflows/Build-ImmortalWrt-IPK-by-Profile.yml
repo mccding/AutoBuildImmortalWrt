@@ -233,6 +233,7 @@ jobs:
           find bin/ -name "*.ipk" -type f -exec ls -la {} \; || true
 
       - name: Organize and upload IPK package
+        if: always()  # 即使前面步骤失败也要尝试上传已有的文件
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "ipk-${{ inputs.package_name }}-${{ inputs.profile }}-${{ github.run_number }}"
@@ -255,8 +256,12 @@ jobs:
             ⚠️  **注意事项:**
             - 请确保路由器架构与编译目标一致
             - 安装前建议备份系统配置
+            - 如果某些包编译失败，只包含成功编译的包
           files: |
             ~/immortalwrt/bin/packages/*/*/*.ipk
+            ~/immortalwrt/bin/packages/*/*.ipk
+            ~/immortalwrt/bin/*.ipk
           prerelease: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

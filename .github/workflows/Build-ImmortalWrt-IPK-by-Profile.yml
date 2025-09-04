@@ -95,8 +95,22 @@ jobs:
 
       - name: Clone ImmortalWrt source code
         run: |
-          if [ ! -d "~/immortalwrt" ]; then
-            git clone https://github.com/immortalwrt/immortalwrt.git -b ${{ inputs.immortalwrt_branch_or_tag }} --depth 1 ~/immortalwrt
+          # 删除可能存在的目录
+          if [ -d "~/immortalwrt" ]; then
+            echo "删除已存在的 immortalwrt 目录"
+            rm -rf ~/immortalwrt
+          fi
+          
+          echo "克隆 ImmortalWrt 源码..."
+          git clone https://github.com/immortalwrt/immortalwrt.git -b ${{ inputs.immortalwrt_branch_or_tag }} --depth 1 ~/immortalwrt
+          
+          # 验证克隆是否成功
+          if [ -d ~/immortalwrt ]; then
+            echo "✅ ImmortalWrt 源码克隆成功"
+            echo "目录大小: $(du -sh ~/immortalwrt)"
+          else
+            echo "❌ ImmortalWrt 源码克隆失败"
+            exit 1
           fi
 
       - name: Setup feeds and clone custom package
@@ -104,12 +118,37 @@ jobs:
           cd ~/immortalwrt
           
           # 更新默认 feeds
+          echo "更新 feeds..."
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-          # 直接克隆插件到 package 目录
-          echo "正在克隆插件仓库到 package/${{ inputs.package_name }}..."
-          git clone ${{ inputs.package_repo }} package/${{ inputs.package_name }}
+          # 克隆插件仓库到临时目录
+          echo "克隆插件仓库..."
+          git clone ${{ inputs.package_repo }} temp_ddns
+          
+          # 检查仓库结构
+          echo "仓库结构:"
+          ls -la temp_ddns/
+          
+          # 根据实际结构复制文件
+          if [ -d "temp_ddns/ddns-go" ] && [ -d "temp_ddns/luci-app-ddns-go" ]; then
+            echo "发现两个子包，分别复制..."
+            cp -r temp_ddns/ddns-go package/
+            cp -r temp_ddns/luci-app-ddns-go package/
+          elif [ -f "temp_ddns/Makefile" ]; then
+            echo "发现根目录包，直接复制..."
+            cp -r temp_ddns package/${{ inputs.package_name }}
+          else
+            echo "未识别的仓库结构"
+            tree temp_ddns/ || ls -laR temp_ddns/
+            exit 1
+          fi
+          
+          # 清理临时目录
+          rm -rf temp_ddns
+          
+          echo "最终 package 目录结构:"
+          find package/ -name "*ddns*" -type d
 
       - name: Configure build target
         run: |
@@ -130,20 +169,22 @@ jobs:
         run: |
           cd ~/immortalwrt
           
-          echo "=== 检查插件是否正确克隆 ==="
-          ls -la package/${{ inputs.package_name }}/ || echo "插件目录不存在"
+          echo "=== 检查包目录结构 ==="
+          ls -la package/ | grep ddns
           
-          echo "=== 检查 Makefile ==="
-          if [ -f "package/${{ inputs.package_name }}/Makefile" ]; then
-            echo "Makefile 存在，显示前20行："
-            head -20 package/${{ inputs.package_name }}/Makefile
-          else
-            echo "Makefile 不存在，查找其他可能的构建文件："
-            find package/${{ inputs.package_name }}/ -name "Makefile*" -o -name "*.mk"
+          echo "=== 检查 ddns-go 包 ==="
+          if [ -d "package/ddns-go" ]; then
+            echo "ddns-go 包存在"
+            ls -la package/ddns-go/
+            [ -f "package/ddns-go/Makefile" ] && echo "ddns-go Makefile 存在"
           fi
           
-          echo "=== 插件目录完整结构 ==="
-          tree package/${{ inputs.package_name }}/ || ls -laR package/${{ inputs.package_name }}/
+          echo "=== 检查 luci-app-ddns-go 包 ==="
+          if [ -d "package/luci-app-ddns-go" ]; then
+            echo "luci-app-ddns-go 包存在"
+            ls -la package/luci-app-ddns-go/
+            [ -f "package/luci-app-ddns-go/Makefile" ] && echo "luci-app-ddns-go Makefile 存在"
+          fi
 
       - name: Download dependencies
         run: |
@@ -154,34 +195,27 @@ jobs:
         run: |
           cd ~/immortalwrt
           
-          echo "当前目录: $(pwd)"
+          echo "开始编译..."
           
-          # 检查包是否存在
-          if [ ! -d "package/${{ inputs.package_name }}" ]; then
-            echo "❌ 错误: ${{ inputs.package_name }} 目录不存在"
-            exit 1
+          # 编译 ddns-go 包
+          if [ -d "package/ddns-go" ] && [ -f "package/ddns-go/Makefile" ]; then
+            echo "编译 ddns-go 包..."
+            make package/ddns-go/compile -j$(nproc) V=s
+          else
+            echo "⚠️  ddns-go 包不存在，跳过"
           fi
           
-          echo "✅ ${{ inputs.package_name }} 目录存在"
-          
-          # 检查子目录结构并编译
-          if [ -d "package/${{ inputs.package_name }}/ddns-go" ] && [ -d "package/${{ inputs.package_name }}/luci-app-ddns-go" ]; then
-            echo "发现两个子包，分别编译..."
-            
-            echo "编译 ddns-go..."
-            make "package/${{ inputs.package_name }}/ddns-go/compile" -j$(nproc) V=s
-            
-            echo "编译 luci-app-ddns-go..."
-            make "package/${{ inputs.package_name }}/luci-app-ddns-go/compile" -j$(nproc) V=s
-            
-          elif [ -f "package/${{ inputs.package_name }}/Makefile" ]; then
-            echo "发现根目录 Makefile，直接编译整个包..."
-            make "package/${{ inputs.package_name }}/compile" -j$(nproc) V=s
-            
+          # 编译 luci-app-ddns-go 包
+          if [ -d "package/luci-app-ddns-go" ] && [ -f "package/luci-app-ddns-go/Makefile" ]; then
+            echo "编译 luci-app-ddns-go 包..."
+            make package/luci-app-ddns-go/compile -j$(nproc) V=s
           else
-            echo "❌ 未找到有效的编译目标"
-            echo "目录结构:"
-            ls -la "package/${{ inputs.package_name }}/"
+            echo "⚠️  luci-app-ddns-go 包不存在，跳过"
+          fi
+          
+          # 检查是否有任何包被成功编译
+          if [ ! -d "package/ddns-go" ] && [ ! -d "package/luci-app-ddns-go" ]; then
+            echo "❌ 没有找到任何可编译的包"
             exit 1
           fi
 

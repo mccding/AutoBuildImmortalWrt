@@ -103,42 +103,107 @@ jobs:
         run: |
           cd ~/immortalwrt
           
+          # 添加自定义 feed
           echo "src-git custom ${{ inputs.package_repo }}" >> feeds.conf.default
           
+          # 更新和安装 feeds
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
+          # 配置目标设备
           echo "CONFIG_TARGET_rockchip=y" > .config
           echo "CONFIG_TARGET_rockchip_armv8=y" >> .config
           echo "CONFIG_TARGET_rockchip_armv8_DEVICE_${{ inputs.profile }}=y" >> .config
           
+          # 添加包到编译配置
           echo "CONFIG_PACKAGE_${{ inputs.package_name }}=m" >> .config
           
           make defconfig
 
-      # ##################################################################
-      # ## ↓↓↓ 这里是本次修改的核心部分 ↓↓↓
-      # ##################################################################
+      - name: Debug package location
+        run: |
+          cd ~/immortalwrt
+          
+          echo "=== 查找包位置 ==="
+          find package/ -name "${{ inputs.package_name }}" -type d || true
+          find feeds/ -name "${{ inputs.package_name }}" -type d || true
+          
+          echo "=== feeds 目录结构 ==="
+          ls -la feeds/ || true
+          
+          echo "=== package/feeds 目录结构 ==="
+          ls -la package/feeds/ || true
+          
+          echo "=== custom feed 内容 ==="
+          ls -la package/feeds/custom/ || true
+
       - name: Compile the package
         run: |
           cd ~/immortalwrt
           
-          # 增加 'make download' 步骤, 用于下载所有依赖包的源码, 确保编译系统能找到所有目标
+          # 下载依赖包
           make download -j$(nproc)
           
-          # 然后再执行编译
-          make package/feeds/custom/${{ inputs.package_name }}/compile -j$(nproc) V=s
+          # 确保包正确安装
+          ./scripts/feeds update custom
+          ./scripts/feeds install ${{ inputs.package_name }}
+          
+          # 智能检测包位置并编译
+          if [ -d "package/feeds/custom/${{ inputs.package_name }}" ]; then
+            echo "编译 feeds 中的包: package/feeds/custom/${{ inputs.package_name }}"
+            make package/feeds/custom/${{ inputs.package_name }}/compile -j$(nproc) V=s
+          elif [ -d "package/${{ inputs.package_name }}" ]; then
+            echo "编译直接包: package/${{ inputs.package_name }}"
+            make package/${{ inputs.package_name }}/compile -j$(nproc) V=s
+          else
+            echo "未找到包，尝试查找所有可能的包位置："
+            find package/ -name "*${{ inputs.package_name }}*" -type d
+            
+            # 尝试使用通配符匹配
+            PACKAGE_PATH=$(find package/ -name "*${{ inputs.package_name }}*" -type d | head -1)
+            if [ -n "$PACKAGE_PATH" ]; then
+              echo "找到包路径: $PACKAGE_PATH"
+              RELATIVE_PATH=${PACKAGE_PATH#package/}
+              make package/$RELATIVE_PATH/compile -j$(nproc) V=s
+            else
+              echo "错误: 无法找到包 ${{ inputs.package_name }}"
+              exit 1
+            fi
+          fi
+
+      - name: Check compiled packages
+        run: |
+          cd ~/immortalwrt
+          
+          echo "=== 查找编译生成的 IPK 文件 ==="
+          find bin/ -name "*.ipk" -type f || true
+          
+          echo "=== 详细列出 IPK 文件 ==="
+          find bin/ -name "*.ipk" -type f -exec ls -la {} \; || true
 
       - name: Organize and upload IPK package
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "ipk-${{ inputs.package_name }}-${{ inputs.profile }}"
+          tag_name: "ipk-${{ inputs.package_name }}-${{ inputs.profile }}-${{ github.run_number }}"
           name: "ImmortalWrt - ${{ inputs.package_name }} (${{ inputs.profile }})"
           body: |
-            (从源码构建) 自动编译生成的 IPK 插件包。
+            **自动编译生成的 IPK 插件包**
+            
+            📦 **编译信息:**
             - ImmortalWrt 版本: `${{ inputs.immortalwrt_branch_or_tag }}`
             - 目标设备: `${{ inputs.profile }}`
             - 插件仓库: `${{ inputs.package_repo }}`
+            - 编译时间: ${{ github.event.head_commit.timestamp }}
+            - 工作流运行: #${{ github.run_number }}
+            
+            📋 **安装说明:**
+            1. 将 IPK 文件上传到路由器
+            2. 使用以下命令安装: `opkg install *.ipk`
+            3. 重启 luci 服务: `/etc/init.d/uhttpd restart`
+            
+            ⚠️  **注意事项:**
+            - 请确保路由器架构与编译目标一致
+            - 安装前建议备份系统配置
           files: |
             ~/immortalwrt/bin/packages/*/*/*.ipk
           prerelease: true

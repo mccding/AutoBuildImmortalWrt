@@ -99,16 +99,21 @@ jobs:
             git clone https://github.com/immortalwrt/immortalwrt.git -b ${{ inputs.immortalwrt_branch_or_tag }} --depth 1 ~/immortalwrt
           fi
 
-      - name: Add custom feeds and configure build
+      - name: Setup feeds and clone custom package
         run: |
           cd ~/immortalwrt
           
-          # 添加自定义 feed
-          echo "src-git custom ${{ inputs.package_repo }}" >> feeds.conf.default
-          
-          # 更新和安装 feeds
+          # 更新默认 feeds
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+          
+          # 直接克隆插件到 package 目录
+          echo "正在克隆插件仓库到 package/${{ inputs.package_name }}..."
+          git clone ${{ inputs.package_repo }} package/${{ inputs.package_name }}
+
+      - name: Configure build target
+        run: |
+          cd ~/immortalwrt
           
           # 配置目标设备
           echo "CONFIG_TARGET_rockchip=y" > .config
@@ -124,61 +129,58 @@ jobs:
         run: |
           cd ~/immortalwrt
           
-          echo "=== 查找包位置 ==="
-          find package/ -name "${{ inputs.package_name }}" -type d || true
-          find feeds/ -name "${{ inputs.package_name }}" -type d || true
+          echo "=== 检查插件是否正确克隆 ==="
+          ls -la package/${{ inputs.package_name }}/ || echo "插件目录不存在"
           
-          echo "=== feeds 目录结构 ==="
-          ls -la feeds/ || true
+          echo "=== 检查 Makefile ==="
+          if [ -f "package/${{ inputs.package_name }}/Makefile" ]; then
+            echo "Makefile 存在，显示前20行："
+            head -20 package/${{ inputs.package_name }}/Makefile
+          else
+            echo "Makefile 不存在，查找其他可能的构建文件："
+            find package/${{ inputs.package_name }}/ -name "Makefile*" -o -name "*.mk"
+          fi
           
-          echo "=== package/feeds 目录结构 ==="
-          ls -la package/feeds/ || true
-          
-          echo "=== custom feed 内容 ==="
-          ls -la package/feeds/custom/ || true
+          echo "=== 插件目录完整结构 ==="
+          tree package/${{ inputs.package_name }}/ || ls -laR package/${{ inputs.package_name }}/
+
+      - name: Download dependencies
+        run: |
+          cd ~/immortalwrt
+          make download -j$(nproc)
 
       - name: Compile the package
         run: |
           cd ~/immortalwrt
           
-          # 下载依赖包
-          make download -j$(nproc)
-          
-          # 确保包正确安装
-          ./scripts/feeds update custom
-          ./scripts/feeds install ${{ inputs.package_name }}
-          
-          # 智能检测包位置并编译
-          if [ -d "package/feeds/custom/${{ inputs.package_name }}" ]; then
-            echo "编译 feeds 中的包: package/feeds/custom/${{ inputs.package_name }}"
-            make package/feeds/custom/${{ inputs.package_name }}/compile -j$(nproc) V=s
-          elif [ -d "package/${{ inputs.package_name }}" ]; then
-            echo "编译直接包: package/${{ inputs.package_name }}"
-            make package/${{ inputs.package_name }}/compile -j$(nproc) V=s
-          else
-            echo "未找到包，尝试查找所有可能的包位置："
-            find package/ -name "*${{ inputs.package_name }}*" -type d
-            
-            # 尝试使用通配符匹配
-            PACKAGE_PATH=$(find package/ -name "*${{ inputs.package_name }}*" -type d | head -1)
-            if [ -n "$PACKAGE_PATH" ]; then
-              echo "找到包路径: $PACKAGE_PATH"
-              RELATIVE_PATH=${PACKAGE_PATH#package/}
-              make package/$RELATIVE_PATH/compile -j$(nproc) V=s
-            else
-              echo "错误: 无法找到包 ${{ inputs.package_name }}"
-              exit 1
-            fi
+          # 检查包是否存在
+          if [ ! -d "package/${{ inputs.package_name }}" ]; then
+            echo "错误: 插件目录 package/${{ inputs.package_name }} 不存在"
+            exit 1
           fi
+          
+          # 检查 Makefile
+          if [ ! -f "package/${{ inputs.package_name }}/Makefile" ]; then
+            echo "错误: Makefile 不存在于 package/${{ inputs.package_name }}/"
+            echo "查找可能的 Makefile："
+            find package/${{ inputs.package_name }}/ -name "*akefile*" -o -name "*.mk"
+            exit 1
+          fi
+          
+          echo "开始编译插件: ${{ inputs.package_name }}"
+          make package/${{ inputs.package_name }}/compile -j$(nproc) V=s
 
       - name: Check compiled packages
         run: |
           cd ~/immortalwrt
           
           echo "=== 查找编译生成的 IPK 文件 ==="
-          find bin/ -name "*.ipk" -type f || true
+          find bin/ -name "*.ipk" -type f | grep -i ddns || echo "未找到 ddns 相关的 IPK 文件"
           
-          echo "=== 详细列出 IPK 文件 ==="
+          echo "=== 所有编译生成的 IPK 文件 ==="
+          find bin/ -name "*.ipk" -type f || echo "未找到任何 IPK 文件"
+          
+          echo "=== IPK 文件详细信息 ==="
           find bin/ -name "*.ipk" -type f -exec ls -la {} \; || true
 
       - name: Organize and upload IPK package

@@ -154,26 +154,35 @@ jobs:
           cd ~/immortalwrt
           
           echo "当前目录: $(pwd)"
-          echo "package 目录内容:"
-          ls -la package/ | grep ddns || echo "未找到 ddns 相关目录"
           
           # 检查包是否存在
-          if [ ! -d "package/ddns-go" ]; then
-            echo "❌ 错误: ddns-go 目录不存在"
-            echo "尝试查找相关目录:"
-            find package/ -name "*ddns*" -type d 2>/dev/null || echo "未找到任何 ddns 相关目录"
-            echo "package 目录完整内容:"
-            ls -la package/
+          if [ ! -d "package/${{ inputs.package_name }}" ]; then
+            echo "❌ 错误: ${{ inputs.package_name }} 目录不存在"
             exit 1
           fi
           
-          echo "✅ ddns-go 目录存在"
-          echo "ddns-go 目录结构:"
-          ls -la package/ddns-go/
+          echo "✅ ${{ inputs.package_name }} 目录存在"
           
-          # 按照官方文档的编译方式
-          echo "按照官方文档编译: package/ddns-go/luci-app-ddns-go"
-          make package/ddns-go/luci-app-ddns-go/compile -j$(nproc) V=s
+          # 检查子目录结构并编译
+          if [ -d "package/${{ inputs.package_name }}/ddns-go" ] && [ -d "package/${{ inputs.package_name }}/luci-app-ddns-go" ]; then
+            echo "发现两个子包，分别编译..."
+            
+            echo "编译 ddns-go..."
+            make "package/${{ inputs.package_name }}/ddns-go/compile" -j$(nproc) V=s
+            
+            echo "编译 luci-app-ddns-go..."
+            make "package/${{ inputs.package_name }}/luci-app-ddns-go/compile" -j$(nproc) V=s
+            
+          elif [ -f "package/${{ inputs.package_name }}/Makefile" ]; then
+            echo "发现根目录 Makefile，直接编译整个包..."
+            make "package/${{ inputs.package_name }}/compile" -j$(nproc) V=s
+            
+          else
+            echo "❌ 未找到有效的编译目标"
+            echo "目录结构:"
+            ls -la "package/${{ inputs.package_name }}/"
+            exit 1
+          fi
 
       - name: Check compiled packages
         run: |

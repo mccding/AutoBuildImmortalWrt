@@ -121,6 +121,7 @@ jobs:
           echo "CONFIG_TARGET_rockchip_armv8_DEVICE_${{ inputs.profile }}=y" >> .config
           
           # 添加包到编译配置
+          echo "CONFIG_PACKAGE_ddns-go=m" >> .config
           echo "CONFIG_PACKAGE_${{ inputs.package_name }}=m" >> .config
           
           make defconfig
